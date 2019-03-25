@@ -213,7 +213,7 @@ RT distributions for the target absent condition can provide useful information 
 Here are typical RT distributions from the target absent conditions in Experiments 1 and 2. 
 
 ```{r}
-# visualize RT distributions in experiment 1 and 2.(Figure 9 in the paper)
+# visualize RT distributions.(Figure 9 in the paper)
 # show the quiting changed as the set size change.
 estPDF <- function(df, bw = 0.25) {
   est = bkde(df$rt, bandwidth = bw)
@@ -228,13 +228,16 @@ exps[[1]] %>% filter(rt < 4.9) %>%
   unnest(est, .drop = TRUE) %>%
   filter(rt > 0)  -> pdf1
 
-pdf1$`Set size` = as.factor(pdf1$setsize)
+colnames(pdf1)<- c("sub","Setsize","rt", "pdf")
+pdf1$setsize = as.factor(pdf1$Setsize)
 pdf1$Subject = as.factor(pdf1$sub)
 
 # visualize two typical subjects  
 fig_pdf1 = pdf1 %>% filter(Subject %in% c(7, 11)) %>%
-  ggplot(aes(rt, pdf, color = `Set size`, linetype = Subject)) + geom_line() +
-  xlab('RT (secs)') + ylab('Prob. Density') + scale_colour_grey()
+  ggplot(aes(rt, pdf, color = setsize, linetype = Subject)) + geom_line() +
+  xlab('RT (secs)') + ylab('Prob. Density') + scale_colour_grey() + scale_colour_grey()
+  #+ labs(x = "RT (secs)", y = "Prob. Density", color = "Set size") 
+  
 #fig_pdf1
 #ggsave('figures/fig_pdf1.png',fig_pdf1,width = 3.5,height = 3)
 
