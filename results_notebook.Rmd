@@ -16,10 +16,6 @@ source('dyn_data_analysis.R')
 
 Here we conducted three experiments with dynamic and static search, and examined the search slope ratios between the target-absent to target-present for the dynamic and static search displays. We then developed a search termination model to account the findings of 'flat' search slope ration in the dynamic search. This notebook generates the figures and statistics for the formal manuscript. 
 
-## Schematic illusration of signal detection approach
-
-When the target is present in the dynamic search, the probability of target hasn't been sampled decreases over the time. This is due to the resample design itself. The following figure illustrate the miss rate and false alarm as well as the miss rate decreases over the time. 
-
 
 ## Experiment 1
 
@@ -65,6 +61,8 @@ bf = dat$exp1$slope %>% filter(target == 'Present') %>%
   anovaBF(slope ~ dyn + sub, whichRandom = "sub", data = .)
 bf
 ```
+
+Now we compare the slopes within dynamic search (present vs. absent)
 
 ```{r}
 a1 = dat$exp1$slope %>% filter(dyn == 'Dynamic') %>%
@@ -215,7 +213,7 @@ RT distributions for the target absent condition can provide useful information 
 Here are typical RT distributions from the target absent conditions in Experiments 1 and 2. 
 
 ```{r}
-# visualize RT distributions (Figure 9. in the paper)
+# visualize RT distributions in experiment 1 and 2.(Figure 9 in the paper)
 # show the quiting changed as the set size change.
 estPDF <- function(df, bw = 0.25) {
   est = bkde(df$rt, bandwidth = bw)
@@ -255,7 +253,7 @@ fig_pdf2 = pdf2 %>% filter(sub %in% c(9)) %>%
   xlab('RT (secs)') + ylab('Prob. Density') + scale_colour_grey()
 #fig_pdf2
 #ggsave('figures/fig_pdf2.png',fig_pdf2,width = 3.5,height = 3)
-fig9 = plot_grid(fig_pdf1, fig_pdf1, nrow = 1, labels = c("A","B"))
-fig9
-ggsave('figures/fig9.png',fig9,width = 7,height = 3)
+RTdist = plot_grid(fig_pdf1, fig_pdf2, nrow = 1, labels = c("A","B"))
+RTdist
+ggsave('figures/RTdist.png',RTdist,width = 7,height = 3)
 ```

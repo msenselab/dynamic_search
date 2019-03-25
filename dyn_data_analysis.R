@@ -11,14 +11,19 @@ library(ggsignif)
 library(ggpubr)
 library(reshape2)
 library(KernSmooth)
+
+
+#---------------------------------------#
+#         global configuration          #
+#---------------------------------------#
+# theme setting
 theme_set(theme_classic())
-
 # flag for save figures
-saveFigure = FALSE
+saveFigure = TRUE
 
-#------------------------------------------#
-# load data files: 3 experimental datasets #
-#------------------------------------------#
+#--------------------------------------#
+#  load data: 3 experimental datasets  #
+#--------------------------------------#
 # see also readme.pdf in experiments folder
 # Exp. 1. Replication of Horowitz & Wolfe (1998) Exp. 1
 # Exp. 2. reward manipulation: session wise (two sessions/exps)
@@ -91,6 +96,8 @@ getMeanData <- function(df) {
 
 #' Estimate d-prime and C
 #' calculate response sensitivity and bias using signal detection theory (sdt)
+#' revision: correction for extreme values according to Macmillan and Kaplan (1985), 
+#' correction factor: 0.5/n.
 #' @param df experimental raw data
 #' @return dprime and bias C
 sdt_dprime <- function(df) {
@@ -104,12 +111,12 @@ sdt_dprime <- function(df) {
   gp_vars = syms(gp_var) # prepare the group variables
   
   # subject-wise
-  sdt_sub <- df %>%  filter(resp > 0) %>% # filter valid trials
+  sdt_sub <- df %>%  #filter(resp > 0) %>% # filter valid trials
     group_by(!!!gp_vars) %>%
-    summarise(mresp = mean(2 - resp)) %>% # calculate positive response subject-wise
+    summarise(mresp = mean(correct), cnt = n()) %>% # calculate positive response subject-wise
     spread(target, mresp) %>% # rearrange hit (Prsent) and FA (Absent) in one row
-    mutate(dprime = qnorm(pmin(Present, 0.995)) - qnorm(pmax(Absent, 0.005)),
-           bias = -(qnorm(pmin(Present, 0.995)) + qnorm(pmax(Absent, 0.005))) /
+    mutate(dprime = qnorm(pmin(Present, 1-0.5/cnt)) - qnorm(pmax(1-Absent, 0.5/cnt)),
+           bias = -(qnorm(pmin(Present, 1-0.5/cnt)) + qnorm(pmax(1-Absent, 0.5/cnt))) /
              2) %>%
     group_by(!!!gp_vars[3:length(gp_vars)]) %>% # no 'sub' and 'target'
     nest()
@@ -201,64 +208,65 @@ names(dat) <- exp_names
 # such as plotRT, plotSlopeErrbar,plotSDT  #
 #------------------------------------------#
 
-
-
-
 # definition of the function plotRT
 plotRT <- function(df) {
   if ("reward" %in% colnames(df)) {
     fig_aes = aes(
       x = setsize,
       y = mmrt,
-      color = target,
-      shape = target,
-      fill = target,
-      linetype = reward
+      color = dyn,
+      shape = reward,
+      fill = interaction(reward, target)
     )
+    line_aes = aes(linetype = target)
     lt = quo(reward)
   } else {
     fig_aes = aes(
       x = setsize,
       y = mmrt,
-      shape = target,
-      color = target,
+      color = dyn,
       fill = target
     )
+    line_aes = aes(linetype = target)
     lt = quo(target)
   }
   
   fig.rt <- ggplot(df, fig_aes) +
-    geom_point(size = 2) + geom_line() +
+    geom_point(size = 2) + geom_line(line_aes) +
     geom_errorbar(aes(ymin = mmrt - sert, ymax = mmrt + sert), width = 0.5) +
-    xlab('') + ylab('RT (Secs)') +
+    labs(y = 'RT (Secs)', color = 'Search', shape = 'Reward', linetype = 'Target') +
     scale_x_continuous(breaks = c(8, 12, 16)) +
-    scale_color_manual(values = c('gray', 'black')) +
+    scale_color_manual(values = c('#fdae61', '#2c7bb6')) +
     scale_linetype_manual(values = c(2, 1)) +
+    scale_fill_manual(values = c('white', 'white','white','white')) +
+    scale_shape_manual(values = c(21,22)) +
     facet_wrap( ~ dyn) +
-    theme(legend.position = 'none', strip.background = element_blank())
+    guides(fill = 'none') + 
+    theme(legend.position = 'right', strip.background = element_blank()) 
   
   # change y axis
   fig_aes$y = quo(merr)
   
   fig.err <- ggplot(df, fig_aes) +
-    geom_bar(position = position_dodge(), stat = 'identity') +
-    geom_errorbar(aes(ymin = merr, ymax = merr + se),
+    geom_bar(position = position_dodge(), stat = 'identity', color = 'black') +
+    geom_errorbar(aes(ymin = merr, ymax = merr + se),color = 'black',
                   position = position_dodge()) +
-    xlab('Set Size') + ylab('Error rate') +
+    labs(x = 'Set Size', y = 'Error rate', fill = '') +
     scale_x_continuous(breaks = c(8, 12, 16)) +
-    scale_color_manual(values = c('gray', 'black')) +
-    scale_fill_manual(values = c('gray', 'black')) +
+    scale_color_manual(values = c('#fdae61', '#2c7bb6')) +
+    scale_fill_manual(values = c('black', 'gray50','gray80','white')) +
     facet_wrap( ~ dyn) +
     theme(
-      legend.position = 'bottom',
+      legend.position = 'right',
       strip.background = element_blank(),
       strip.text.x = element_blank()
-    )
+    ) 
   
   plot_grid(fig.rt,
             fig.err,
             nrow = 2,
-            rel_heights = c(3, 2))
+            rel_heights = c(3, 2), 
+            rel_widths = c(3,2))
 }
 
 
@@ -291,9 +299,8 @@ plotSlopeErrbar <- function(df) {
       x = dyn,
       y = m_slope,
       ymin = m_slope,
-      color = target,
-      fill = reward,
-      linetype = reward,
+      color = dyn,
+      fill = interaction(target, reward),
       ymax = m_slope + sd_slope
     )
   } else {
@@ -302,10 +309,9 @@ plotSlopeErrbar <- function(df) {
       x = dyn,
       y = m_slope,
       ymin = m_slope,
-      color = target,
-      ymax = m_slope + sd_slope,
-      group = target,
-      fill = target
+      color = dyn,
+      fill = target,
+      ymax = m_slope + sd_slope
     )
   }
   gp_vars = syms(gp_var) # prepare the group variables
@@ -322,10 +328,11 @@ plotSlopeErrbar <- function(df) {
              position = position_dodge()) +
     geom_errorbar(width = 0.2,
                   position = position_dodge(width = 0.9)) +
-    labs(x = "Display Type", y = "Slope (ms/item)") +
-    scale_color_manual(values = c('gray', 'black')) +
-    scale_fill_manual(values = c('gray', 'black')) +
-    theme(legend.position = 'bottom', legend.title = element_blank())
+    labs(x = "Search Type", y = "Slope (ms/item)") +
+    scale_color_manual(values = c('#fdae61', '#2c7bb6')) +
+    scale_fill_manual(values = c('black', 'gray80','gray50','white')) +
+    guides(color = 'none') +
+    theme(legend.position = c(0.26,0.85), legend.title = element_blank())
   
   return(fig.mSlope.bar)
 }
@@ -340,43 +347,51 @@ plotSDT <- function(df) {
       x = setsize,
       y = mdprime,
       color = dyn,
-      shape = dyn,
-      linetype = reward
+      shape = reward
     )
+    line_aes = aes(linetype = reward)
   } else {
     fig_aes = aes(
       x = setsize,
       y = mdprime,
       color = dyn,
-      shape = dyn,
-      fill = dyn
+      shape = dyn
     )
+    line_aes = aes(linetype = dyn)
   }
   
   err_aes = aes(ymin = mdprime - dse, ymax = mdprime + dse)
   
   fig.dprime <- ggplot(df, fig_aes) +
-    geom_point(size = 2) + geom_line() +
+    geom_point(size = 2) + geom_line(line_aes) +
     geom_errorbar(err_aes, width = 0.5) +
-    xlab('') + ylab("d'") +
+    xlab('Set Size') + ylab("d'") +
     scale_x_continuous(breaks = c(8, 12, 16)) +
-    scale_color_manual(values = c('black', 'gray')) +
-    scale_fill_manual(values = c('black', 'gray')) +
-    theme(legend.position = 'bottom', legend.title = element_blank())
+    scale_color_manual(values = c('#fdae61', '#2c7bb6')) +
+    #    scale_fill_manual(values = c('gray90', 'gray40')) +
+    scale_shape_manual(values = c(21,22)) +
+    theme(legend.position = 'none', legend.title = element_blank())
   
   # plot biase, by changing y axis
   fig_aes$y = quo(mbias)
   err_aes = aes(ymin = mbias - cse, ymax = mbias + cse)
   
   fig.bias <- ggplot(df, fig_aes) +
-    geom_point(size = 2) + geom_line() +
+    geom_point(size = 2) + geom_line(line_aes) +
     geom_errorbar(err_aes, width = 0.5) +
-    xlab('') + ylab("C") +
-    scale_color_manual(values = c('black', 'gray')) +
-    scale_fill_manual(values = c('black', 'gray')) +
+    scale_color_manual(values = c('#fdae61', '#2c7bb6')) +
+    #    scale_fill_manual(values = c('gray90', 'gray40')) +
+    scale_shape_manual(values = c(21,22)) +
     scale_x_continuous(breaks = c(8, 12, 16)) +
-    theme(legend.position = 'bottom', legend.title = element_blank())
+    theme(legend.position = 'right')
   
+  if ("reward" %in% colnames(df)) {
+    fig.bias <- fig.bias + guides(linetype = 'none') +
+      labs(x='Set Size', y = "C", fill = 'Display', shape = 'Reward', color = 'Display')
+  } else {
+    fig.bias <- fig.bias + 
+      labs(x='Set Size', y = "C", fill = 'Display', shape = 'Display', color = 'Display', linetype = 'Display')
+  }
   return(list('dprime' = fig.dprime, 'bias' = fig.bias))
 }
 
@@ -400,7 +415,7 @@ for (exname in exp_names) {
   fig = plot_grid(figSlopes[[exname]],
                   fig_ds[[exname]],
                   fig_cs[[exname]],
-                  nrow = 1,
+                  nrow = 1,rel_widths = c(2,2,3),
                   labels = c("A", "B", "C"))
   if (saveFigure == TRUE) {
     ggsave(file.path('figures', paste0(exname, '_combine.png')),
@@ -498,4 +513,6 @@ for (exname in exp_names) {
         )
     }
 }
+
+
 
