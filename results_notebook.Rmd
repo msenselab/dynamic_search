@@ -1,0 +1,261 @@
+---
+title: "Search slopes in dynamic and static search"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r setup, include=FALSE, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(BayesFactor)
+library(latex2exp)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE) 
+options(scipen=0, digits=3)
+source('dyn_data_analysis.R')
+```
+
+Here we conducted three experiments with dynamic and static search, and examined the search slope ratios between the target-absent to target-present for the dynamic and static search displays. We then developed a search termination model to account the findings of 'flat' search slope ration in the dynamic search. This notebook generates the figures and statistics for the formal manuscript. 
+
+## Schematic illusration of signal detection approach
+
+When the target is present in the dynamic search, the probability of target hasn't been sampled decreases over the time. This is due to the resample design itself. The following figure illustrate the miss rate and false alarm as well as the miss rate decreases over the time. 
+
+
+## Experiment 1
+
+### 1.1 Mean RTs and error rates
+
+```{r}
+figRTs$exp1
+```
+
+### 1.2. ANOVA test on RTs
+
+```{r exp1rt_st}
+rt_anova$exp1$ANOVA
+```
+
+### 1.3. Slopes,d' and biases:
+
+```{r figcb1}
+fig_combine$exp1
+```
+
+### 1.4. ANOVA for the slopes
+
+```{r}
+slope_anova$exp1$ANOVA
+```
+
+The interaction in the slopes was mainly caused by the large slope in the static target-absent condition. We further tested if the slopes in the dynamic conditions were the same or not. 
+
+
+first, confirmation of the original study, 'present' slopes had no difference. 
+```{r}
+a1 = dat$exp1$slope %>% filter(target == 'Present') %>%
+  ezANOVA(data = ., dv = slope, wid = sub, within = dyn)
+a1$ANOVA
+```
+
+
+Bayes Factor:
+```{r}
+dat$exp1$slope$sub <- factor(dat$exp1$slope$sub)
+bf = dat$exp1$slope %>% filter(target == 'Present') %>%
+  anovaBF(slope ~ dyn + sub, whichRandom = "sub", data = .)
+bf
+```
+
+```{r}
+a1 = dat$exp1$slope %>% filter(dyn == 'Dynamic') %>%
+  ezANOVA(data = ., dv = slope, wid = sub, within = target)
+a1$ANOVA
+```
+
+```{r}
+bf = dat$exp1$slope %>% filter(dyn == 'Dynamic') %>%
+  anovaBF(slope ~ target + sub, whichRandom = "sub", data = .)
+bf
+```
+
+### 1.5. ANOVA for d' and bias C
+
+Search discrimination sensitivity d':
+```{r}
+d_anova$exp1$ANOVA
+```
+
+Search response bias C:
+
+```{r}
+c_anova$exp1$ANOVA
+```
+
+## Experiment 2
+
+### 2.1. Correct RTs from Experiment 2
+
+```{r fig1}
+figRTs$exp2
+```
+
+### 2.2. RT statistics
+
+```{r exp2rt_st}
+rt_anova$exp2$ANOVA
+```
+
+### 2.3. Slopes,d' and biases:
+
+```{r figcb2}
+fig_combine$exp2
+```
+
+### 2.4. ANOVA for the slopes
+
+```{r}
+slope_anova$exp2$ANOVA
+```
+
+Examine if the slopes in the dynamic search differ between the target absent/present, reward present/absent. 
+
+```{r}
+a21 = dat$exp2$slope %>% filter(dyn == 'Dynamic') %>%
+  ezANOVA(data = ., dv = slope, wid = sub, within = .(target,reward))
+a21$ANOVA
+```
+
+#### 2.5 ANOVA for d' and bias C
+
+Search discrimination sensitivity d':
+```{r}
+d_anova$exp2$ANOVA
+```
+
+Search response bias C:
+
+```{r}
+c_anova$exp2$ANOVA
+```
+
+## Experiment 3
+
+### 3.1. Correct RTs from Experiment 3
+
+```{r rtfig3}
+figRTs$exp3
+```
+
+### 3.2. RT statistics
+
+```{r exp3rt_st}
+rt_anova$exp3$ANOVA
+```
+
+### 3.3. Slopes,d' and biases:
+
+```{r figcb3}
+fig_combine$exp3
+```
+
+### 3.4. ANOVA for the slopes
+
+```{r}
+slope_anova$exp3$ANOVA
+```
+
+We further test if the slope in the dynamic condition was different.
+
+```{r}
+a5 = dat$exp3$slope %>% filter(dyn == 'Dynamic') %>%
+  ezANOVA(data = ., dv = slope, wid = sub, within = target)
+a5$ANOVA
+```
+
+Bayes Factor:
+```{r}
+dat$exp3$slope$sub <- factor(dat$exp3$slope$sub)
+bf = dat$exp3$slope %>% filter(dyn == 'Dynamic') %>%
+  anovaBF(slope ~ target + sub, whichRandom = "sub", data = .)
+bf
+```
+
+
+and the 'present' slopes between the dynamic and static displays
+```{r}
+a6 = dat$exp3$slope %>% filter(target == 'Present') %>%
+  ezANOVA(data = ., dv = slope, wid = sub, within = dyn)
+a6$ANOVA
+```
+
+Bayes Factor:
+```{r}
+bf = dat$exp3$slope %>% filter(target == 'Present') %>%
+  anovaBF(slope ~ dyn + sub, whichRandom = "sub", data = .)
+bf
+```
+
+### 3.5 ANOVA for d' and bias C
+
+Search discrimination sensitivity d':
+```{r}
+d_anova$exp3$ANOVA
+```
+
+Search response bias C:
+
+```{r}
+c_anova$exp3$ANOVA
+```
+
+## RT distributions
+
+RT distributions for the target absent condition can provide useful information of how observers set their stopping rules. 
+
+Here are typical RT distributions from the target absent conditions in Experiments 1 and 2. 
+
+```{r}
+# visualize RT distributions (Figure 9. in the paper)
+# show the quiting changed as the set size change.
+estPDF <- function(df, bw = 0.25) {
+  est = bkde(df$rt, bandwidth = bw)
+  pdf = tibble(rt = est$x, pdf = est$y)
+  return(pdf)
+}
+# visualize RT distributions in Experiment 1
+exps[[1]] %>% filter(rt < 4.9) %>%
+  filter(dyn == 'Dynamic', target == 'Absent') %>%
+  group_by(sub, setsize) %>% nest() %>%
+  mutate(est = map(data, estPDF, bw = 0.2)) %>%
+  unnest(est, .drop = TRUE) %>%
+  filter(rt > 0)  -> pdf1
+
+pdf1$`Set size` = as.factor(pdf1$setsize)
+pdf1$Subject = as.factor(pdf1$sub)
+
+# visualize two typical subjects  
+fig_pdf1 = pdf1 %>% filter(Subject %in% c(7, 11)) %>%
+  ggplot(aes(rt, pdf, color = `Set size`, linetype = Subject)) + geom_line() +
+  xlab('RT (secs)') + ylab('Prob. Density') + scale_colour_grey()
+#fig_pdf1
+#ggsave('figures/fig_pdf1.png',fig_pdf1,width = 3.5,height = 3)
+
+# visualize RT distributions in Experiment 2
+exps[[2]] %>% filter(rt < 4.9) %>%
+  filter(dyn == 'Dynamic', target == 'Absent') %>%
+  group_by(sub, setsize, reward) %>% nest() %>%
+  mutate(est = map(data, estPDF, bw = 0.2)) %>%
+  unnest(est, .drop = TRUE) %>%
+  filter(rt > 0)  -> pdf2
+pdf2$setsize = as.factor(pdf2$setsize)
+
+# visualize one typical participants  
+fig_pdf2 = pdf2 %>% filter(sub %in% c(9)) %>%
+  ggplot(aes(rt, pdf, color = setsize, linetype = reward)) + geom_line() +
+  xlab('RT (secs)') + ylab('Prob. Density') + scale_colour_grey()
+#fig_pdf2
+#ggsave('figures/fig_pdf2.png',fig_pdf2,width = 3.5,height = 3)
+fig9 = plot_grid(fig_pdf1, fig_pdf1, nrow = 1, labels = c("A","B"))
+fig9
+ggsave('figures/fig9.png',fig9,width = 7,height = 3)
+```
