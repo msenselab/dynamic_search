@@ -1,9 +1,9 @@
 source('dyn_data_analysis.R')
 library(parallel)
 
-#---------------------------------------#
-#  model simulation of the expriments   #
-#---------------------------------------#
+#----------------------------------------#
+#  model simulation of the experiments   #
+#----------------------------------------#
 
 # Read data for experiment 1 and extract the means into a data frame
 e1_data_mean <-
@@ -77,6 +77,79 @@ names(e3_data_se)[2:3] <- c("Absent_se", "Present_se")
 # combine mean and standard error into a single data frame
 e3_data <- full_join(e3_data_mean, e3_data_se)
 
+# Static data below
+
+# Read data for experiment 1 and extract the means into a data frame
+e1_data_stat_mean <-
+  full_join(
+    dat$exp1$mrt %>% filter(dyn == "Static") %>% select(setsize, target, mmrt) %>%
+      spread(target, mmrt),
+    dat$exp1$sensitivity %>% filter(dyn == "Static") %>% ungroup() %>%
+      select(setsize, mdprime, mbias)
+  )
+
+# Read data for experiment 1 and extract the standard errors into a data frame
+e1_data_stat_se <-
+  full_join(
+    dat$exp1$mrt %>% filter(dyn == "Static") %>% select(setsize, target, sert) %>%
+      spread(target, sert),
+    dat$exp1$sensitivity %>% filter(dyn == "Static") %>% ungroup() %>%
+      select(setsize, dse, cse)
+  )
+
+# Rename columns for standard error data frame to distinguish from means
+names(e1_data_stat_se)[2:3] <- c("Absent_se", "Present_se")
+
+# combine mean and standard error into a single data frame
+e1_data_stat <- full_join(e1_data_stat_mean, e1_data_stat_se)
+
+# Read data for experiment 2 and extract the means into a data frame
+e2_data_stat_mean <-
+  full_join(
+    dat$exp2$mrt %>% filter(dyn == "Static") %>% ungroup() %>%
+      select(setsize, target, reward, mmrt) %>% spread(target, mmrt),
+    dat$exp2$sensitivity %>% filter(dyn == "Static") %>% ungroup() %>%
+      select(setsize, mdprime, reward, mbias)
+  )
+
+# Read data for experiment 2 and extract the standard errors into a data frame
+e2_data_stat_se <-
+  full_join(
+    dat$exp2$mrt %>% filter(dyn == "Static") %>% ungroup() %>%
+      select(setsize, target, reward, sert) %>% spread(target, sert),
+    dat$exp2$sensitivity %>% filter(dyn == "Static") %>% ungroup() %>%
+      select(setsize, dse, reward, cse)
+  )
+
+# Rename columns for standard error data frame to distinguish from means
+names(e2_data_stat_se)[3:4] <- c("Absent_se", "Present_se")
+
+# combine mean and standard error into a single data frame
+e2_data_stat <- full_join(e2_data_stat_mean, e2_data_stat_se)
+
+# Read data for experiment 13and extract the means into a data frame
+e3_data_stat_mean <-
+  full_join(
+    dat$exp3$mrt %>% filter(dyn == "Static") %>% select(setsize, target, mmrt) %>%
+      spread(target, mmrt),
+    dat$exp3$sensitivity %>% filter(dyn == "Static") %>% ungroup() %>%
+      select(setsize, mdprime, mbias)
+  )
+
+# Read data for experiment 3 and extract the standard errors into a data frame
+e3_data_stat_se <-
+  full_join(
+    dat$exp3$mrt %>% filter(dyn == "Static") %>% select(setsize, target, sert) %>%
+      spread(target, sert),
+    dat$exp3$sensitivity %>% filter(dyn == "Static") %>% ungroup() %>%
+      select(setsize, dse, cse)
+  )
+
+# Rename columns for standard error data frame to distinguish from means
+names(e3_data_stat_se)[2:3] <- c("Absent_se", "Present_se")
+
+# combine mean and standard error into a single data frame
+e3_data_stat <- full_join(e3_data_stat_mean, e3_data_stat_se)
 
 # ---- Functions ----
 # parallel processing of estimates. 
@@ -87,7 +160,9 @@ parEstimate <- function(fun, para){
   clusterEvalQ(cl, {library(dplyr) })
   clusterExport(cl, c('simulate_trial', 'simulate_trial2', 'simulate_trial3', 
                       'simulate_experiment', 'fit_model', 'fit_model_e2', 
-                      'e1_data', 'e2_data', 'e3_data', 'simulate_trial4', 'simulate_trial5', 'simulate_trial6'))
+                      'e1_data', 'e2_data', 'e3_data',
+                      'e1_data_stat', 'e2_data_stat', 'e3_data_stat',
+                      'simulate_trial4', 'simulate_trial5', 'simulate_trial6'))
   
   t0 = proc.time()
   ll <- clusterMap(cl, fun, para)
@@ -95,7 +170,6 @@ parEstimate <- function(fun, para){
   print(proc.time()-t0)
   return(ll)
 }
-
 #' Simulate one trial of dynamic search experiment
 #' This simple first attempt at modelling assumes that participants sample items in the search display randomly and respond
 #' target present after sampling a target (or what they believe to be a target, see below about misperception) a single time,
@@ -377,16 +451,39 @@ simulate_trial5 <- function(p_d,
                             dsd,
                             C,
                             dt = 110,
-                            ndt = 0) {
+                            ndt = 0,
+                            patch_size = 1, 
+                            set_size = 8, 
+                            static=FALSE, 
+                            N_max=Inf) {
   d <- -1
   ss_start <- 0 # Starting value for stop signal
   n <- 0
   N <-
     20 # Number of frames to check each iteration, does not change result only speed
-  
-  while (d == -1) {
+
+  if(static) {
+    N <- N_max # Static search so exhaustive search will be finished within N_max samples
+    if(p_d==1) { # Target absent so 100% probability of not sampling target
+      p_d = rep(1,N)
+    } else { # Target present, probability of not sampling target decreases towards zero with each sample
+      for (i in 1:N) {
+        p_d[i] <- max(1 - patch_size/((set_size - (i-1)*patch_size)), 0)
+      }
+    }
+  }
+    
+  while (d == -1 & n < N_max) {
     # Repeat while a decision has not been reached yet
     tp <- runif(N) < p_d # absent assigned 1, present 0
+    
+    if(static) { # In static search the same location is not revisited so the target is sampled exactly once
+      first_tp <- min(which(tp == FALSE))
+      if(first_tp < N) { # If only the last patch sampled contains the target do nothing
+        tp[(min(which(tp == FALSE))+1):N] <- TRUE # Otherwise make sure all other patches do not contain target
+      }
+    }
+    
     sa <- rnorm(N, 0, dsd) # target absent variables
     da <-
       sa > C # Decisions with 'target present' on target absent trials
@@ -404,6 +501,10 @@ simulate_trial5 <- function(p_d,
     if (is.na(n_a) & is.na(n_p)) {
       # No decision was reached yet
       n <- n + N
+      
+      if(static) { # Exhaustive search finished without finding target 
+        d <- FALSE
+      }
     } else if (is.na(n_a)) {
       # A target present decision was reached
       n <- n + n_p
@@ -424,12 +525,13 @@ simulate_trial5 <- function(p_d,
     }
     ss_start <- ss[N]
   }
+  n = min(n, N_max)
   rt <- n * dt
   return(c(rt + ndt, d))
 }
 
 #' @param p_d probability that sampled item is a distractor, should be 1 for target absent and arguably 1-1/#items for present
-#' @param dt Time spent per samoled item(s)
+#' @param dt Time spent per sampled item(s)
 #' @param ndt Nondecision time
 #' @param N_m Stopping threshold
 #' @param C Criterion level on the decision variable on each frame
@@ -528,7 +630,10 @@ simulate_experiment <-
            N_sd = 0,
            dm = 0,
            dsd = 0,
-           C = 1)
+           C = 1,
+           patch_size = 1,
+           set_size = 8,
+           static = FALSE)
   {
     rts <- rep(0, N_trials)
     hit <- rep(0, N_trials)
@@ -597,7 +702,11 @@ simulate_experiment <-
               Ts = N_m,
               dm = dm,
               dsd = dsd,
-              C = C
+              C = C,
+              patch_size = patch_size,
+              set_size = set_size,
+              static = static,
+              N_max=N_max
             )
         )
         rts[i] <- t[1]
@@ -667,7 +776,11 @@ simulate_experiment <-
               Ts = N_m,
               dm = dm,
               dsd = dsd,
-              C = C
+              C = C,
+              patch_size = patch_size,
+              set_size = set_size,
+              static = static,
+              N_max=N_max
             )
         )
         rts[i] <- t[1]
@@ -705,7 +818,8 @@ fit_model <-
             weights = c(1, 1, 1),
             plot = 0,
             return_model = 0,
-            N = 5000) {
+            N = 5000,
+            static = FALSE) {
     if (model == 1) {
       p_fa = param[1]
       N_max_8 = param[2] + round(8 * param[3])
@@ -914,6 +1028,16 @@ fit_model <-
       pd_16 <- 1 - 1 / (16 * param[4])
       dm <- param[5]
       
+      if(static) { # If static search then exhaustive search will be finished in this many samples
+        N_max_8 = ceiling(8 * param[4]) 
+        N_max_12 = ceiling(12 * param[4]) 
+        N_max_16 = ceiling(16 * param[4]) 
+      } else { # Dynamic search, so no upper limit on # samples before finding target
+        N_max_8 = Inf
+        N_max_12 = Inf
+        N_max_16 = Inf
+      }
+      
       simulate_experiment(
         N,
         0.5,
@@ -922,7 +1046,11 @@ fit_model <-
         N_m = Ts_8,
         dm = dm,
         dsd = 1,
-        C = C
+        C = C,
+        N_max = N_max_8,
+        patch_size = round(1/param[4]),
+        set_size = 8,
+        static = static
       ) -> mod_8
       simulate_experiment(
         N,
@@ -932,7 +1060,11 @@ fit_model <-
         N_m = Ts_12,
         dm = dm,
         dsd = 1,
-        C = C
+        C = C,
+        N_max = N_max_12,
+        patch_size = round(1/param[4]),
+        set_size = 12,
+        static = static
       ) -> mod_12
       simulate_experiment(
         N,
@@ -942,7 +1074,11 @@ fit_model <-
         N_m = Ts_16,
         dm = dm,
         dsd = 1,
-        C = C
+        C = C,
+        N_max = N_max_16,
+        patch_size = round(1/param[4]),
+        set_size = 16,
+        static = static
       ) -> mod_16
     }
     
@@ -1108,7 +1244,8 @@ fit_model_e2 <-
             weights = c(1, 1, 1),
             plot = 0,
             return_model = 0,
-            N = 5000) {
+            N = 5000,
+            static = FALSE) {
     if (model == 1) {
       p_fa = param[1]
       N_max_8 = param[2] + round(8 * param[3])
@@ -1354,6 +1491,17 @@ fit_model_e2 <-
       Ts_12_ra = Ts_12 - param[7]
       Ts_16_ra = Ts_16 - param[7]
       
+      
+      if(static) { # If static search then exhaustive search will be finished in this many samples
+        N_max_8 = ceiling(8 * param[4]) 
+        N_max_12 = ceiling(12 * param[4]) 
+        N_max_16 = ceiling(16 * param[4]) 
+      } else { # Dynamic search, so no upper limit on # samples before finding target
+        N_max_8 = Inf
+        N_max_12 = Inf
+        N_max_16 = Inf
+      }
+      
       simulate_experiment(
         N,
         0.5,
@@ -1362,7 +1510,11 @@ fit_model_e2 <-
         N_m = Ts_8_rp,
         dm = dm,
         dsd = 1,
-        C = C_rp
+        C = C_rp,
+        N_max = N_max_8,
+        patch_size = round(1/param[4]),
+        set_size = 8,
+        static = static
       ) -> mod_8_rp
       simulate_experiment(
         N,
@@ -1372,7 +1524,11 @@ fit_model_e2 <-
         N_m = Ts_12_rp,
         dm = dm,
         dsd = 1,
-        C = C_rp
+        C = C_rp,
+        N_max = N_max_12,
+        patch_size = round(1/param[4]),
+        set_size = 12,
+        static = static
       ) -> mod_12_rp
       simulate_experiment(
         N,
@@ -1382,7 +1538,11 @@ fit_model_e2 <-
         N_m = Ts_16_rp,
         dm = dm,
         dsd = 1,
-        C = C_rp
+        C = C_rp,
+        N_max = N_max_16,
+        patch_size = round(1/param[4]),
+        set_size = 16,
+        static = static
       ) -> mod_16_rp
       simulate_experiment(
         N,
@@ -1392,7 +1552,11 @@ fit_model_e2 <-
         N_m = Ts_8_ra,
         dm = dm,
         dsd = 1,
-        C = C_ra
+        C = C_ra,
+        N_max = N_max_8,
+        patch_size = round(1/param[4]),
+        set_size = 8,
+        static = static
       ) -> mod_8_ra
       simulate_experiment(
         N,
@@ -1402,7 +1566,11 @@ fit_model_e2 <-
         N_m = Ts_12_ra,
         dm = dm,
         dsd = 1,
-        C = C_ra
+        C = C_ra,
+        N_max = N_max_12,
+        patch_size = round(1/param[4]),
+        set_size = 12,
+        static = static
       ) -> mod_12_ra
       simulate_experiment(
         N,
@@ -1412,7 +1580,11 @@ fit_model_e2 <-
         N_m = Ts_16_ra,
         dm = dm,
         dsd = 1,
-        C = C_ra
+        C = C_ra,
+        N_max = N_max_16,
+        patch_size = round(1/param[4]),
+        set_size = 16,
+        static = static
       ) -> mod_16_ra
       
       # For reaction times look at differences since one of them can easily be fit by setting the NDT parameter appropriately
@@ -1557,7 +1729,7 @@ fit_model_e2 <-
           )
         )
       sorted_data <-
-        gather(e2_data, target, rt, Absent, Present) %>% arrange(desc(reward), desc(target))
+        gather(data, target, rt, Absent, Present) %>% arrange(desc(reward), desc(target))
       ndt <- mean(sorted_data$rt * 1000 - mean(rts_mod$mRT))
       rts_mod$mRT <- rts_mod$mRT + ndt
       rt_plot <-
@@ -1885,3 +2057,194 @@ ggsave(
   width = 7,
   height = 4
 )
+
+
+
+# ---- Fit model to static data from Experiment 1 ----
+
+# Prepare a reasonable range of parameter values
+p1_range <- seq(2.2, 3.8, 0.1)
+p2_range <- 60 # Value from dynamic search
+p3_range <- 1 # Value from dynamic search
+p4_range <- 1 / seq(1:5)
+p5_range <- seq(2.6, 5.2, 0.2)
+para <-
+  data.frame(t(expand.grid(
+    p1_range, p2_range, p3_range, p4_range, p5_range
+  )))
+
+# Helper function for fitting model 5 to data from Exp. 1
+e1_m5_fit_stat <- function(p) {
+  fit_model(p, model = 5, e1_data_stat, static=TRUE)
+}
+
+# Find best parameter values in the range defined above
+#fp_e1_m5 <- parEstimate(e1_m5_fit_stat, para)
+#saveRDS(fp_e1_m5, 'data/fp_e1_m5_stat.rds')
+
+# Read results from previous optimization and extract best-fitting parameters
+fp_e1_m5 <- readRDS('data/fp_e1_m5_stat.rds')
+fp_e1_m5 <- unlist(fp_e1_m5)
+param <- para[fp_e1_m5 == min(fp_e1_m5)]
+param <- param[[1]]
+
+# param <- c(2.6, 21,  1.0,  1/3,  4.2)
+
+l <-
+  fit_model(
+    param,
+    model = 5,
+    e1_data_stat,
+    plot = 1,
+    return_model = 1,
+    N = 100000,
+    static = TRUE
+  )
+
+# Plot model fit figure and extract the predictions of the model
+fit_exp1_stat = last_plot() # save the plot
+mod5_e1_8_stat <- l[[1]]
+mod5_e1_12_stat <- l[[2]]
+mod5_e1_16_stat <- l[[3]]
+
+#saveRDS(l, "data/modelfit_e1_stat.rds")
+
+
+# ---- Fit model to static data from Experiment 2 ----
+
+# Prepare a reasonable range of parameter values
+p1_range <- seq(2.5, 4, 0.1)
+p2_range <- 60
+p3_range <- 1
+p4_range <- 1 / seq(1:3)
+p5_range <- seq(3, 6, 0.1)
+p6_range <- seq(0, 1, 0.25)
+p7_range <- 0
+para <-
+  data.frame(t(
+    expand.grid(
+      p1_range,
+      p2_range,
+      p3_range,
+      p4_range,
+      p5_range,
+      p6_range,
+      p7_range
+    )
+  ))
+
+# Helper function for fitting model 5 to data from Exp. 2
+e2_m5_fit_stat <- function(p) {
+  fit_model_e2(p, model = 5, e2_data_stat, static=TRUE)
+}
+
+# Find best parameter values in the range defined above
+#fp_e2_m5 <- parEstimate(e2_m5_fit_stat, para)
+#saveRDS(fp_e2_m5, 'data/fp_e2_m5_stat.rds')
+
+# Read results from previous optimization and extract best-fitting parameters
+fp_e2_m5 <- readRDS('data/fp_e2_m5_stat.rds')
+fp_e2_m5 <- unlist(fp_e2_m5)
+param <- para[fp_e2_m5 == min(fp_e2_m5)]
+param <- param[[1]]
+
+# param <- c(2.7, 21, 0.4, 0.25, 3.4, 0.25, 4.2)
+
+# Plot model fit figure and extract the predictions of the model
+l <-
+  fit_model_e2(
+    param,
+    model = 5,
+    e2_data_stat,
+    plot = 1,
+    return_model = 1,
+    N = 100000,
+    static=TRUE
+  )
+fit_exp2_stat = last_plot() # save the plot
+mod5_e2_8_rp <- l[[1]]
+mod5_e2_12_rp <- l[[2]]
+mod5_e2_16_rp <- l[[3]]
+mod5_e2_8_ra <- l[[4]]
+mod5_e2_12_ra <- l[[5]]
+mod5_e2_16_ra <- l[[6]]
+
+#saveRDS(l, "data/modelfit_e2_stat.rds")
+
+
+ggsave(
+  'figures/Model_predictions_e2_stat.png',
+  fit_exp2_stat,
+  units = 'in',
+  dpi = 600,
+  width = 6,
+  height = 7
+)
+
+# ---- Fit model to static data from Experiment 3 ----
+
+# Prepare a reasonable range of parameter values
+p1_range <- seq(1.8, 3.6, 0.1)
+p2_range <- 60
+p3_range <- 1
+p4_range <- 1 / seq(1:5)
+p5_range <- seq(1.4, 5.4, 0.2)
+para <-
+  data.frame(t(expand.grid(
+    p1_range, p2_range, p3_range, p4_range, p5_range
+  )))
+
+# Helper function for fitting model 5 to data from Exp. 3
+e3_m5_fit_stat <-
+  function(p) {
+    fit_model(p, model = 5, e3_data_stat, weights = c(1, 1, 4), static=TRUE)
+  }
+
+# Find best parameter values in the range defined above
+#fp_e3_m5 <- parEstimate(e3_m5_fit_stat, para)
+#saveRDS(fp_e3_m5, 'data/fp_e3_m5_stat.rds')
+
+# Read results from previous optimization and extract best-fitting parameters
+fp_e3_m5 <- readRDS('data/fp_e3_m5_stat.rds')
+fp_e3_m5 <- unlist(fp_e3_m5)
+param <- para[fp_e3_m5 == min(fp_e3_m5)]
+param <- param[[1]]
+
+# param <- c(2.1, 14,  0.7,  1/3,  2.0)
+
+# Plot model fit figure and extract the predictions of the model
+l <-
+  fit_model(
+    param,
+    model = 5,
+    e3_data_stat,
+    plot = 1,
+    return_model = 1,
+    N = 100000,
+    static = TRUE
+  )
+
+fit_exp3_stat = last_plot() # save the plot
+mod5_e3_8 <- l[[1]]
+mod5_e3_12 <- l[[2]]
+mod5_e3_16 <- l[[3]]
+
+#saveRDS(l, "data/modelfit_e3_stat.rds")
+
+
+# Combine model fit figures for Exp 1 and Exp 3 and save
+fit_figs = plot_grid(fit_exp1_stat,
+                     fit_exp3_stat,
+                     nrow = 2,
+                     labels = c("A", "B"))
+fit_figs
+ggsave(
+  'figures/fit_exp13_stat.png',
+  fit_figs,
+  units = 'in',
+  dpi = 600,
+  width = 7,
+  height = 4
+)
+
+
