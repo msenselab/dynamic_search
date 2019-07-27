@@ -11,19 +11,14 @@ library(ggsignif)
 library(ggpubr)
 library(reshape2)
 library(KernSmooth)
-
-
-#---------------------------------------#
-#         global configuration          #
-#---------------------------------------#
-# theme setting
 theme_set(theme_classic())
+
 # flag for save figures
 saveFigure = TRUE
 
-#--------------------------------------#
-#  load data: 3 experimental datasets  #
-#--------------------------------------#
+#------------------------------------------#
+# load data files: 3 experimental datasets #
+#------------------------------------------#
 # see also readme.pdf in experiments folder
 # Exp. 1. Replication of Horowitz & Wolfe (1998) Exp. 1
 # Exp. 2. reward manipulation: session wise (two sessions/exps)
@@ -241,40 +236,68 @@ plotRT <- function(df) {
     scale_fill_manual(values = c('white', 'white','white','white')) +
     scale_shape_manual(values = c(21,22)) +
     facet_wrap( ~ dyn) +
-    guides(fill = 'none') + 
-    theme(legend.position = 'right', strip.background = element_blank()) 
+    guides(fill = 'none') 
+  
+  if ("reward" %in% colnames(df)) {
+    fig.rt <- fig.rt + 
+      theme(legend.position = 'none', strip.background = element_blank()) 
+  } else {
+    fig.rt <- fig.rt + 
+      theme(legend.position = 'right', strip.background = element_blank()) 
+  }
   
   # change y axis
   fig_aes$y = quo(merr)
-  
-  fig.err <- ggplot(df, fig_aes) +
-    geom_bar(position = position_dodge(), stat = 'identity', color = 'black') +
-    geom_errorbar(aes(ymin = merr, ymax = merr + se),color = 'black',
-                  position = position_dodge()) +
-    labs(x = 'Set Size', y = 'Error rate', fill = '') +
-    scale_x_continuous(breaks = c(8, 12, 16)) +
-    scale_color_manual(values = c('#fdae61', '#2c7bb6')) +
-    scale_fill_manual(values = c('black', 'gray50','gray80','white')) +
-    facet_wrap( ~ dyn) +
-    theme(
-      legend.position = 'right',
-      strip.background = element_blank(),
-      strip.text.x = element_blank()
-    ) 
-  
-  plot_grid(fig.rt,
-            fig.err,
-            nrow = 2,
-            rel_heights = c(3, 2), 
-            rel_widths = c(3,2))
+  if ("reward" %in% colnames(df)) {
+    fig.err <- ggplot(df, fig_aes) +
+      geom_point(size = 2) + geom_line(line_aes) +
+      geom_errorbar(aes(ymin = merr - se, ymax = merr + se), width = 0.5) +
+      labs(y = 'Error rate', color = 'Search', shape = 'Reward', linetype = 'Target') +
+      scale_x_continuous(breaks = c(8, 12, 16)) +
+      scale_color_manual(values = c('#fdae61', '#2c7bb6')) +
+      scale_linetype_manual(values = c(2, 1)) +
+      scale_fill_manual(values = c('white', 'white','white','white')) +
+      scale_shape_manual(values = c(21,22)) +
+      facet_wrap( ~ dyn) +
+      guides(fill = 'none') + 
+      theme(legend.position = 'bottom', strip.background = element_blank()) 
+  } else {
+    fig.err <- ggplot(df, fig_aes) +
+      geom_bar(position = position_dodge(), stat = 'identity', color = 'black') +
+      geom_errorbar(aes(ymin = merr, ymax = merr + se),color = 'black',
+                    position = position_dodge()) +
+      labs(x = 'Set Size', y = 'Error rate', fill = '') +
+      scale_x_continuous(breaks = c(8, 12, 16)) +
+      scale_color_manual(values = c('#fdae61', '#2c7bb6')) +
+      scale_fill_manual(values = c('black', 'gray50','gray80','white')) +
+      facet_wrap( ~ dyn) +
+      theme(
+        legend.position = 'right',
+        strip.background = element_blank(),
+        strip.text.x = element_blank()
+      ) 
+  }
+  if ("reward" %in% colnames(df)) {
+    plot_grid(fig.rt,
+              fig.err,
+              nrow = 2,
+              rel_heights = c(3, 3), 
+              rel_widths = c(3,2))
+  } else {
+    plot_grid(fig.rt,
+              fig.err,
+              nrow = 2,
+              rel_heights = c(3, 2), 
+              rel_widths = c(3,2))
+  }
 }
 
 
-# ---- generation of results in figures  ----
-# plotting results of experiments in figures and save them to the folder 'figures'
-# Figure 2 -- exp1_rt.png
-# Figure 4 -- exp2_rt.png
-# Figure 6 -- exp3_rt.png
+# ---- generation of rt figures  ----
+# plot rt figures and save to the subfolder figures
+# Note: Figure 3 used in the paper is exp1_rt.png.
+# Figure 7 - exp3_rt.png
+# Figure 5 - exp2_rt.png
 figRTs = list()
 for (exname in exp_names) {
   figRTs[[exname]] = plotRT(dat[[exname]]$mrt)
@@ -332,7 +355,8 @@ plotSlopeErrbar <- function(df) {
     scale_color_manual(values = c('#fdae61', '#2c7bb6')) +
     scale_fill_manual(values = c('black', 'gray80','gray50','white')) +
     guides(color = 'none') +
-    theme(legend.position = c(0.26,0.85), legend.title = element_blank())
+    theme(legend.position = c(0.26,0.85), legend.title = element_blank(), 
+          legend.key = element_rect(color="black"), legend.spacing.x = unit(0.1, 'cm'))
   
   return(fig.mSlope.bar)
 }
@@ -407,11 +431,9 @@ for (exname in exp_names) {
 }
 
 # ---- combined_plot ---
-# combine the subfigures of mean search slopes, target discrimination sensitivity and response criterion
-# figure 3 -- 'exp1_combine.png'
-# Figure 5 -- 'exp2_combine.png'
-# Figure 7 -- 'exp3_combine.png'
-
+# Note that Figure 6 in the paper is 'exp2_combine.png', which is generated by this function.
+# Figure 8 - 'exp3_combine.png'
+# figure 4 - 'exp1_combine.png'
 fig_combine = list()
 for (exname in exp_names) {
   fig = plot_grid(figSlopes[[exname]],
@@ -422,8 +444,8 @@ for (exname in exp_names) {
   if (saveFigure == TRUE) {
     ggsave(file.path('figures', paste0(exname, '_combine.png')),
            fig ,
-           width = 9,
-           height = 3)
+           width = 10,
+           height = 3.5)
   }
   fig_combine[[exname]] = fig
 }
@@ -515,6 +537,4 @@ for (exname in exp_names) {
         )
     }
 }
-
-
 
