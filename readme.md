@@ -1,3 +1,7 @@
+Data and analysis code for 
+
+Shi, Z., Allenmark, F., Zhu, X., Elliott, M. A., & Müller, H. J. (2019). To quit or not to quit in dynamic search. Attention, Perception & Psychophysics. https://doi.org/10.3758/s13414-019-01857-7
+
 
 # Experiments
 
